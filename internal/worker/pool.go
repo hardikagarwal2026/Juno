@@ -15,7 +15,11 @@ type Stats struct {
 }
 
 func StartWorker(id int, jobs <-chan *job.Job,results chan<- *job.Job, wg *sync.WaitGroup, stats *Stats) {
-	defer wg.Done() //it is used as a signal that the worker has finished its work
+	//it is used as a signal that the worker has finished its work
+	defer func() {
+        fmt.Printf("[Worker %d] Exiting\n", id)
+        wg.Done()
+    }()
 
 	//iterating through all the jobs 
 	for j:= range jobs {

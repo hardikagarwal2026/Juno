@@ -26,7 +26,7 @@ type Job struct {
 
 //this function is use to mark the no. of retries the job gone through
 func (j *Job) MarkRetry() {
-	atomic.AddInt32(&j.Retries, 1)// use atomic for prevent from dirty read write, or increment the counter by one every timw
+	atomic.AddInt32(&j.Retries, 1)// use atomic for prevent from dirty read write, or increment the counter by one every time
 }
 
 //func to display the status of a job
