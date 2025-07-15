@@ -10,10 +10,18 @@ import (
 	"sync"
 	"time"
 	"golang.org/x/time/rate"
+	"flag"
 
 )
 
+//creating the flags for job buffer size and result channel buffer size
+var (
+	jobChanBufferSize    = flag.Int("job-buffer", 5, "Buffer size for job channel")
+	resultChanBufferSize = flag.Int("result-buffer", 5, "Buffer size for result channel")
+)
+
 func main() {
+	flag.Parse()
 	// Create cancellable context for system-wide shutdown control
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -22,8 +30,8 @@ func main() {
 	shutdown.Listen(cancel)
 
 	// Create channels
-	jobQueue := make(chan *job.Job, 10)   // Job queue shared between dispatcher and workers
-	results := make(chan *job.Job, 10)    // Results channel (successful jobs)
+	jobQueue := make(chan *job.Job, *jobChanBufferSize)   // Job queue shared between dispatcher and workers
+	results := make(chan *job.Job, *resultChanBufferSize)    // Results channel (successful jobs)
 	// rate := time.Tick(300 * time.Millisecond) // Rate limiter: 1 job every 300ms
 
 
