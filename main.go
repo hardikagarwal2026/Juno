@@ -16,8 +16,8 @@ import (
 
 //creating the flags for job buffer size and result channel buffer size
 var (
-	jobChanBufferSize    = flag.Int("job-buffer", 5, "Buffer size for job channel")
-	resultChanBufferSize = flag.Int("result-buffer", 5, "Buffer size for result channel")
+	jobChanBufferSize    = flag.Int("jobbuffer", 5, "Buffer size for job channel")
+	resultChanBufferSize = flag.Int("resultbuffer", 5, "Buffer size for result channel")
 )
 
 func main() {
@@ -34,9 +34,28 @@ func main() {
 	results := make(chan *job.Job, *resultChanBufferSize)    // Results channel (successful jobs)
 	// rate := time.Tick(300 * time.Millisecond) // Rate limiter: 1 job every 300ms
 
+    //for requeuing
+	var requeueWg sync.WaitGroup
+	requeueWg.Add(1)
+
+	//creating a retry queue for failed or tmed out jobs
+	retryqueue := make(chan *job.Job, *jobChanBufferSize)
+
+	// this go routines continuously listens on retryqueue, whenever jobs comes, it sends to to jobqueue
+	go func(){
+		defer requeueWg.Done()
+		for j := range retryqueue {
+			if j.Retries >= 3 {
+					fmt.Printf("[Requeue] Dropping Job #%d from retryQueue — exceeded retries\n", j.ID)
+					continue
+			}
+			jobQueue <- j 
+		}
+	}()
+
 
 	//creating a burstlimiter, it creates a burst in starting, meaning allowing initial number of requests, and then after than channel is free
-	limiter := rate.NewLimiter(rate.Every(300*time.Millisecond), 5)
+	limiter := rate.NewLimiter(rate.Every(300*time.Millisecond), 9)
 
 
 
@@ -46,7 +65,7 @@ func main() {
 
 	// Prepare list of jobs to dispatch
 	var jobList []*job.Job
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= 20; i++ {
 		jobList = append(jobList, &job.Job{
 			ID:      i,
 			Payload: fmt.Sprintf("Payload-%d", i),
@@ -64,12 +83,13 @@ func main() {
 
 	for i := 1; i <= numWorkers; i++ {
 		wg.Add(1)
-		go worker.StartWorker(i, jobQueue, results, &wg, stats)
+		go worker.StartWorker(i, jobQueue,retryqueue, results, &wg, stats)
 	}
 
 	// Wait until all workers have finished
 	wg.Wait()
-
+    close(retryqueue)
+	requeueWg.Wait()
 	// Close results channel once workers are done
 	close(results)
 

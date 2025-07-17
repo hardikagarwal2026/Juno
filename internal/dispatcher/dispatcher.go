@@ -36,5 +36,6 @@ func StartDispatcher(ctx context.Context, jobs []*job.Job, queue chan *job.Job, 
 	}
 
 	//Once all jobs are dispatched, close the job queue so workers stop
-	close(queue)
+	// close(queue)
+	
 }

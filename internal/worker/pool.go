@@ -4,9 +4,17 @@ import (
 	"Distributed_Job_Dispatcher/internal/job"
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 )
+
+
+func calculateBackoff(attempt int) time.Duration {
+	base := 200 * time.Millisecond
+	jitter := time.Duration(rand.Intn(100)) * time.Millisecond
+    return base * (1 << attempt) + jitter
+}
 
 type Stats struct {
 	Processed int
@@ -14,7 +22,7 @@ type Stats struct {
 	Mutex sync.Mutex
 }
 
-func StartWorker(id int, jobs <-chan *job.Job,results chan<- *job.Job, wg *sync.WaitGroup, stats *Stats) {
+func StartWorker(id int, jobs <-chan *job.Job, retryqueue chan<- *job.Job, results chan<- *job.Job, wg *sync.WaitGroup, stats *Stats) {
 	//it is used as a signal that the worker has finished its work
 	defer func() {
         fmt.Printf("[Worker %d] Exiting\n", id)
@@ -41,10 +49,22 @@ func StartWorker(id int, jobs <-chan *job.Job,results chan<- *job.Job, wg *sync.
 			case <- ctx.Done():
 				j.Status = job.TimedOut
 				j.MarkRetry()
+				attempt := int(j.Retries)
 				stats.Mutex.Lock()
 				stats.Failed++
 				stats.Mutex.Unlock()
-				fmt.Printf("Worker %d Job timed out \n",j.ID)
+				fmt.Printf("[Worker %d] Job #%d timed out | Attempt %d\n", id, j.ID, attempt)
+
+				if attempt < 3 {
+					backoff := calculateBackoff(attempt)
+					fmt.Printf("[Worker %d] Retrying Job #%d after %v backoff\n", id, j.ID, backoff)
+					time.Sleep(backoff)
+					j.Status = job.Pending
+					retryqueue <- j
+				} else {
+        			fmt.Printf("[Worker %d] Job #%d exceeded retry limit. Dropping.\n", id, j.ID)
+    			}
+
 		    
 			//if it recieves the result in the channel, it mifht be failed aor success
 			case err:= <- resultChan:
@@ -52,10 +72,22 @@ func StartWorker(id int, jobs <-chan *job.Job,results chan<- *job.Job, wg *sync.
 				if err!=nil {
 					j.Status = job.Failed
 					j.MarkRetry()
+					attempt := int(j.Retries) 
 					stats.Mutex.Lock()
 					stats.Failed++
 					stats.Mutex.Unlock()
 					fmt.Printf("[Worker %d] Job #%d failed: %v\n", id, j.ID, err)
+
+					if attempt < 3 {
+						backoff := calculateBackoff(attempt)
+						fmt.Printf("[Worker %d] Retrying Job #%d after %v backoff\n", id, j.ID, backoff)
+						time.Sleep(backoff)
+						j.Status = job.Pending
+						retryqueue <- j
+					}else{
+						fmt.Printf("[Worker %d] Job #%d exceeded retry limit. Dropping.\n", id, j.ID)
+					}
+
 				} else {
 					j.Status = job.Success
 					stats.Mutex.Lock()
