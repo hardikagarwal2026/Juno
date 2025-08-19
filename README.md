@@ -1,4 +1,4 @@
-## Juno — A hands-on playground for Go concurrency
+## Juno: Concurrent Job Dispatcher
 
 I built Juno to really understand Go’s concurrency model by writing something real: a rate-limited dispatcher that feeds a retry-capable worker pool via channels, with graceful shutdowns, per-job timeouts, and simple stats. This is a small codebase on purpose so I can explain the why behind every piece.
 
