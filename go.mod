@@ -1,4 +1,4 @@
-module Distributed_Job_Dispatcher
+module Juno
 
 go 1.24.4
 
